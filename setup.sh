@@ -24,6 +24,62 @@ CONFIG_FILE="config/setup_config.env"
 
 # Main setup function
 
+select_working_directory() {
+    log_info "Current directory: $(pwd)"
+    log_instruction "Projects will be created as subdirectories in this location."
+    echo ""
+
+    if confirm "Do you want to use a different directory?"; then
+        echo ""
+        local target_dir
+        local valid_dir=false
+
+        while [ "$valid_dir" = false ]; do
+            prompt_input "Enter directory path (~ for home directory)" "" target_dir
+
+            # Expand ~ to home directory
+            target_dir="${target_dir/#\~/$HOME}"
+
+            # Check if directory exists
+            if [ -d "$target_dir" ]; then
+                log_success "Directory exists: $target_dir"
+                valid_dir=true
+            else
+                log_warning "Directory does not exist: $target_dir"
+                if confirm "Do you want to create it?"; then
+                    if mkdir -p "$target_dir" 2>/dev/null; then
+                        log_success "Created directory: $target_dir"
+                        valid_dir=true
+                    else
+                        log_error "Failed to create directory. Please check permissions and try again."
+                        continue
+                    fi
+                else
+                    log_info "Please enter a different directory path"
+                    continue
+                fi
+            fi
+
+            # Check write permissions
+            if [ ! -w "$target_dir" ]; then
+                log_error "No write permission for directory: $target_dir"
+                log_info "Please enter a different directory path"
+                valid_dir=false
+                continue
+            fi
+
+            # Change to the directory
+            if cd "$target_dir" 2>/dev/null; then
+                log_success "Changed working directory to: $(pwd)"
+                echo ""
+            else
+                log_error "Failed to change to directory: $target_dir"
+                valid_dir=false
+            fi
+        done
+    fi
+}
+
 main() {
     print_banner
 
@@ -32,11 +88,14 @@ main() {
     log_info "with the Arcane UI framework, including client, models, and server."
     echo ""
 
-    log_info "Current directory: $(pwd)"
-    log_instruction "Projects will be created as subdirectories in this location."
+    # Select working directory
+    select_working_directory
+
+    log_info "Working directory: $(pwd)"
+    log_instruction "All projects will be created here."
     echo ""
 
-    if ! confirm "Do you want to continue?"; then
+    if ! confirm "Ready to continue?"; then
         log_warning "Setup cancelled by user"
         exit 0
     fi
