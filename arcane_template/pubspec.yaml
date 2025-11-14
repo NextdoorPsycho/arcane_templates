@@ -58,7 +58,26 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.2
 
 flutter:
 
   uses-material-design: true
+
+  assets:
+    - assets/icon/
+
+flutter_native_splash:
+  color: "#230055"
+  image: assets/icon/splash.png
+
+flutter_launcher_icons:
+  ios: true
+  image_path: "assets/icon/icon.png"
+  android: "launcher_icon"
+  web:
+    generate: true
+  windows:
+    generate: true
+  macos:
+    generate: true

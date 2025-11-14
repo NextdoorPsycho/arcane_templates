@@ -1,0 +1,239 @@
+#!/bin/bash
+
+# Generate Configuration Files
+# Creates Firebase configuration files (firebase.json, .firebaserc, rules, etc.)
+
+# Source utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/utils.sh"
+
+generate_firebase_json() {
+    local app_name="$1"
+
+    log_info "Generating firebase.json..."
+
+    cat > firebase.json << EOF
+{
+  "firestore": {
+    "rules": "config/firestore.rules",
+    "indexes": "config/firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "config/storage.rules"
+  },
+  "hosting": [
+    {
+      "public": "$app_name/build/web",
+      "target": "release",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    },
+    {
+      "public": "$app_name/build/web",
+      "target": "beta",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    }
+  ]
+}
+EOF
+
+    log_success "firebase.json created"
+}
+
+generate_firebaserc() {
+    local firebase_project_id="$1"
+
+    log_info "Generating .firebaserc..."
+
+    cat > .firebaserc << EOF
+{
+  "projects": {
+    "default": "$firebase_project_id"
+  },
+  "targets": {
+    "$firebase_project_id": {
+      "hosting": {
+        "release": [
+          "$firebase_project_id"
+        ],
+        "beta": [
+          "$firebase_project_id-beta"
+        ]
+      }
+    }
+  }
+}
+EOF
+
+    log_success ".firebaserc created"
+}
+
+generate_firestore_rules() {
+    ensure_directory "config"
+
+    log_info "Generating Firestore security rules..."
+
+    cat > config/firestore.rules << 'EOF'
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default rule - customize as needed
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+EOF
+
+    log_success "Firestore rules created"
+}
+
+generate_firestore_indexes() {
+    ensure_directory "config"
+
+    log_info "Generating Firestore indexes..."
+
+    cat > config/firestore.indexes.json << 'EOF'
+{
+  "indexes": [],
+  "fieldOverrides": []
+}
+EOF
+
+    log_success "Firestore indexes created"
+}
+
+generate_storage_rules() {
+    ensure_directory "config"
+
+    log_info "Generating Storage security rules..."
+
+    cat > config/storage.rules << 'EOF'
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+EOF
+
+    log_success "Storage rules created"
+}
+
+copy_template_assets() {
+    local app_name="$1"
+    local template_dir="$2"
+
+    log_step "Copying Template Assets"
+
+    # Copy icons and splash assets if they exist in the template
+    if [ -d "$template_dir/assets" ]; then
+        log_info "Copying assets from template..."
+
+        ensure_directory "$app_name/assets"
+
+        cp -r "$template_dir/assets/"* "$app_name/assets/" 2>/dev/null
+
+        if [ $? -eq 0 ]; then
+            log_success "Template assets copied"
+        else
+            log_warning "No assets to copy from template"
+        fi
+    fi
+
+    return 0
+}
+
+update_pubspec_for_assets() {
+    local app_name="$1"
+
+    log_step "Updating pubspec.yaml for Assets"
+
+    local pubspec="$app_name/pubspec.yaml"
+
+    # Check if assets section already exists
+    if grep -q "flutter_native_splash:" "$pubspec"; then
+        log_info "pubspec.yaml already configured for assets"
+        return 0
+    fi
+
+    log_info "Adding asset configuration to pubspec.yaml..."
+
+    # Add assets and configuration
+    cat >> "$pubspec" << 'EOF'
+
+  assets:
+    - assets/icon/
+
+flutter_native_splash:
+  color: "#230055"
+  image: assets/icon/splash.png
+
+flutter_launcher_icons:
+  ios: true
+  image_path: "assets/icon/icon.png"
+  android: "launcher_icon"
+  web:
+    generate: true
+  windows:
+    generate: true
+  macos:
+    generate: true
+EOF
+
+    log_success "pubspec.yaml updated with asset configuration"
+    return 0
+}
+
+generate_all_configs() {
+    local app_name="$1"
+    local firebase_project_id="$2"
+
+    log_step "Generating Firebase Configuration Files"
+
+    # Create config directory
+    ensure_directory "config"
+    ensure_directory "config/keys"
+
+    # Generate Firebase config files
+    generate_firebase_json "$app_name"
+    generate_firebaserc "$firebase_project_id"
+    generate_firestore_rules
+    generate_firestore_indexes
+    generate_storage_rules
+
+    log_success "All configuration files generated"
+    return 0
+}
+
+# Run if script is executed directly
+if [ "${BASH_SOURCE[0]}" -ef "$0" ]; then
+    if [ $# -lt 2 ]; then
+        echo "Usage: $0 <app_name> <firebase_project_id>"
+        echo "Example: $0 my_app my-firebase-project"
+        exit 1
+    fi
+
+    generate_all_configs "$1" "$2"
+fi
