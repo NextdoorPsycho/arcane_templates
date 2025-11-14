@@ -28,20 +28,21 @@ dependencies:
   #  modern_titlebar_buttons: ^1.1.2  #NEEEDED FOR: arcane_desktop
 
   # ARCANE - Transient
+  flutter_native_splash: ^2.4.7
+  tinycolor2: ^3.0.1
+  tryhard: ^1.0.1
+  universal_io: ^2.2.2
 
   # Utility
   rxdart: ^0.28.0
   hive: ^2.2.3
   hive_flutter: ^1.1.0
-  flutter_native_splash: ^2.4.7
   serviced: ^1.0.3
-  lottie: ^3.3.2
   file_picker: ^10.3.6
   jiffy: ^6.4.3
   http: ^1.6.0
   throttled: ^1.0.1
   crypto: ^3.0.7
-  connectivity_plus: ^7.0.0
   flutter_svg: any
   synchronized: ^3.4.0
   convert: ^3.1.2
@@ -50,12 +51,9 @@ dependencies:
   decimal: ^3.2.4
   rational: ^2.2.3
   timeago: ^3.7.1
-  tinycolor2: ^3.0.1
   url_launcher: ^6.3.2
-  tryhard: ^1.0.1
   cached_network_image: ^3.4.1
   faker: ^2.2.0
-  universal_io: ^2.2.2
   email_validator: ^3.0.0
 
 # FIREBASE - (For Arcane Apps that want Firebase Integration)

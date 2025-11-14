@@ -12,6 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/scripts/lib/utils.sh"
 source "$SCRIPT_DIR/scripts/lib/check_tools.sh"
 source "$SCRIPT_DIR/scripts/lib/create_projects.sh"
+source "$SCRIPT_DIR/scripts/lib/copy_templates.sh"
 source "$SCRIPT_DIR/scripts/lib/add_dependencies.sh"
 source "$SCRIPT_DIR/scripts/lib/setup_firebase.sh"
 source "$SCRIPT_DIR/scripts/lib/generate_configs.sh"
@@ -131,6 +132,15 @@ main() {
     # Step 6: Create projects
     print_header "Step 6: Creating Projects"
     create_all_projects "$APP_NAME" "$ORG_DOMAIN" || exit 1
+
+    # Step 6.5: Copy models and server templates
+    print_header "Step 6.5: Copying Models & Server Templates"
+    copy_models_template "$APP_NAME" "$SCRIPT_DIR" || exit 1
+    copy_server_template "$APP_NAME" "$SCRIPT_DIR" "$FIREBASE_PROJECT_ID" || exit 1
+
+    # Step 6.6: Copy template pubspec to preserve comments and configuration
+    print_header "Step 6.6: Copying Client Template Configuration"
+    copy_template_pubspec "$APP_NAME" "$TEMPLATE_DIR" || exit 1
 
     # Step 7: Add dependencies
     print_header "Step 7: Adding Dependencies"

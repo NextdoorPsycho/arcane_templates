@@ -181,6 +181,36 @@ create_all_projects() {
     return 0
 }
 
+copy_template_pubspec() {
+    local app_name="$1"
+    local template_dir="$2"
+
+    log_step "Copying Template pubspec.yaml"
+
+    if [ ! -f "$template_dir/pubspec.yaml" ]; then
+        log_warning "Template pubspec.yaml not found, skipping copy"
+        return 0
+    fi
+
+    log_info "Copying template pubspec.yaml to preserve comments and configuration..."
+
+    # Backup the generated pubspec
+    cp "$app_name/pubspec.yaml" "$app_name/pubspec.yaml.backup"
+
+    # Copy template pubspec
+    cp "$template_dir/pubspec.yaml" "$app_name/pubspec.yaml"
+
+    # Update name in pubspec
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/^name: .*/name: $app_name/" "$app_name/pubspec.yaml"
+    else
+        sed -i "s/^name: .*/name: $app_name/" "$app_name/pubspec.yaml"
+    fi
+
+    log_success "Template pubspec.yaml copied and customized"
+    return 0
+}
+
 delete_test_folders() {
     local app_name="$1"
     local models_name="${app_name}_models"
