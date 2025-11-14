@@ -1,140 +1,120 @@
 # Arcane Dock
 
-**System Tray/Menu Bar Application Template** - A Flutter desktop template for creating applications that live in the system tray (macOS menu bar, Windows system tray, Linux notification area).
+System tray/menu bar application template for desktop platforms. Material Design-free architecture with window management and tray integration.
 
-## 📋 Overview
+## Overview
 
-Arcane Dock is a production-ready template for building desktop applications that:
+Desktop template for applications that live in the system tray (macOS menu bar, Windows system tray, Linux notification area).
 
-- **Live in the system tray** - No dock icon, launches from menu bar/tray
-- **Show popup windows** - Click tray icon to show a sleek popup interface
-- **Auto-hide on blur** - Window automatically hides when focus is lost
-- **Launch at startup** - Optional autolaunch configuration
-- **Cross-platform** - Supports macOS, Linux, and Windows
-
-Perfect for:
-- System utilities and tools
-- Background monitoring apps
-- Quick-access dashboards
-- Always-available interfaces
-- Menu bar applications
-
-## 🎯 Features
-
-### System Tray Integration
+**Features:**
 - Native system tray icon
-- Context menu (right-click)
-- Click to show/hide window
-- Template icons (adapt to system theme on macOS)
+- Popup window on tray click
+- Auto-hide on blur
+- Launch at startup support
+- Cross-platform (macOS, Linux, Windows)
+- Pure Arcane UI
 
-### Window Management
-- Popup window positioned near tray icon
-- Transparent background with blur effects
-- Auto-hide when focus is lost
-- Frameless, always-on-top window
-- Customizable size and position
+**Best for:**
+- System utilities and monitoring tools
+- Background services with UI
+- Always-available dashboards
+- Menu bar applications
+- Quick-access tools
 
-### Application Features
-- Launch at startup configuration
-- Persistent settings with Hive
-- Logging with rotation
-- Package info integration
-- Configuration directory management
+## Quick Start
 
-### UI Framework
-- Pure Arcane components (no Material Design)
-- Theme support (light/dark/system)
-- Glassmorphic effects
-- Responsive layout
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Flutter SDK (latest stable)
-- Platform-specific requirements:
-  - **macOS**: Xcode, CocoaPods
-  - **Linux**: libappindicator3-dev, system tray support
-  - **Windows**: Visual Studio 2019+
-
-### Create New Project
+This template is used via the setup wizard:
 
 ```bash
-# Clone or copy the arcane_dock template
-cp -r arcane_dock my_tray_app
-cd my_tray_app
-
-# Get dependencies
-flutter pub get
-
-# macOS only: Install pods
-cd macos && pod install --repo-update && cd ..
-
-# Run
-flutter run -d macos  # or linux, or windows
+cd ..
+./setup.sh
 ```
 
-### Platform-Specific Setup
+Select "arcane_dock" when prompted.
 
-**⚠️ IMPORTANT**: Each platform requires specific configuration. See [PLATFORM_SETUP.md](PLATFORM_SETUP.md) for detailed instructions.
-
-**Quick summary:**
-- **macOS**: Add `LSUIElement` to `Info.plist`
-- **Linux**: Install `libappindicator3-dev`
-- **Windows**: No additional setup needed
-
-## 📂 Project Structure
+## Structure
 
 ```
 lib/
-├── main.dart                 # App entry, initialization
+├── main.dart              # App entry, initialization, tray setup
 ├── screens/
-│   └── dock_screen.dart     # Main popup UI
+│   └── dock_screen.dart   # Main popup UI
 └── util/
-    └── window_manager.dart  # Tray & window management
+    └── window_manager.dart # Tray & window management
 
 assets/
-├── icon.png                  # App icon
-└── tray.png                  # System tray icon
+├── icon.png               # App icon
+└── tray.png               # System tray icon
 
-macos/                        # macOS platform files
-linux/                        # Linux platform files
-windows/                      # Windows platform files
+macos/
+└── Runner/
+    ├── Info.plist         # LSUIElement configured
+    ├── MainFlutterWindow.swift # launch_at_startup platform code
+    └── *.entitlements     # Sandbox permissions
 ```
 
-## 🎨 Customization
+## Usage
 
-### Change Tray Icon
+**Run the app:**
+```bash
+flutter run -d macos  # or linux, or windows
+```
 
-Replace `assets/tray.png` with your icon:
+**macOS CocoaPods:**
+```bash
+dart run pod_install_macos
+```
 
-**macOS:**
-- 22x22 pixels (@1x), 44x44 (@2x)
-- Black with transparency (template image)
-- Will adapt to system theme
+## System Tray
 
-**Linux:**
-- 22x22 pixels PNG
-- Full color or monochrome
+**Icon requirements:**
 
-**Windows:**
-- 16x16 or 32x32 pixels
-- PNG or ICO format
+macOS: 22x22 pixels (@1x), 44x44 (@2x), black with transparency (template image)
+Linux: 22x22 pixels PNG, full color or monochrome
+Windows: 16x16 or 32x32 pixels PNG or ICO
 
-### Modify Popup Window
+Replace `assets/tray.png` with your icon.
+
+**Menu configuration:**
+
+Edit `lib/util/window_manager.dart` in `initSystemTray()`:
+
+```dart
+final Menu menu = Menu(
+  items: [
+    MenuItem(key: 'show', label: 'Show'),
+    MenuItem(key: 'settings', label: 'Settings'),
+    MenuItem.separator(),
+    MenuItem(key: 'exit', label: 'Quit'),
+  ],
+);
+```
+
+Handle menu clicks in `onTrayMenuItemClick()`.
+
+## Window Management
+
+**Customize window size:**
 
 Edit `lib/util/window_manager.dart`:
 
 ```dart
 static const wm.WindowOptions windowOptions = wm.WindowOptions(
-  size: Size(400, 600),        // Change size
+  size: Size(400, 600),
   maximumSize: Size(400, 600),
   minimumSize: Size(400, 600),
-  // ... other options
+  center: false,
+  alwaysOnTop: true,
+  skipTaskbar: true,
+  titleBarStyle: wm.TitleBarStyle.hidden,
 );
 ```
 
-### Customize UI
+**Window positioning:**
+
+The window automatically positions near the tray icon using `screen_retriever` to get cursor position.
+
+## UI Customization
 
 Edit `lib/screens/dock_screen.dart`:
 
@@ -144,81 +124,75 @@ Widget build(BuildContext context) {
     backgroundColor: context.colorScheme.bg.primary,
     child: Collection(
       children: [
-        // Add your custom UI here
+        Section(
+          titleText: "Status",
+          children: [
+            Tile(
+              titleText: "Online",
+              leading: const Icon(Icons.check_circle),
+            ),
+          ],
+        ),
+        Section(
+          titleText: "Settings",
+          children: [
+            Tile(
+              titleText: "Launch at Startup",
+              trailing: const Icon(Icons.chevron_forward_ionic),
+              onPressed: () => _toggleAutolaunch(),
+            ),
+          ],
+        ),
       ],
     ).padded(),
   );
 }
 ```
 
-### Add Menu Items
+## Launch at Startup
 
-Edit `lib/util/window_manager.dart` in `initSystemTray()`:
-
-```dart
-final Menu menu = Menu(
-  items: [
-    MenuItem(
-      key: 'show',
-      label: 'Show',
-    ),
-    MenuItem(
-      key: 'your_action',
-      label: 'Your Action',
-    ),
-    MenuItem.separator(),
-    MenuItem(
-      key: 'exit',
-      label: 'Exit',
-    ),
-  ],
-);
-```
-
-Handle clicks in `onTrayMenuItemClick()`:
+**Enable/disable:**
 
 ```dart
-@override
-void onTrayMenuItemClick(MenuItem menuItem) {
-  switch (menuItem.key) {
-    case 'your_action':
-      // Handle your action
-      break;
-    // ... other cases
-  }
-}
-```
-
-## 🔧 Configuration
-
-### Launch at Startup
-
-Users can enable/disable autolaunch from the UI:
-
-```dart
-// Programmatically
 await launchAtStartup.enable();
 await launchAtStartup.disable();
+```
 
-// Check status
+**Check status:**
+
+```dart
 final bool isEnabled = await launchAtStartup.isEnabled();
 ```
 
-### Persistent Settings
+**Platform setup:**
 
-Settings are stored in Hive boxes:
+macOS requires platform channel code in `MainFlutterWindow.swift` (included in template).
+
+## Persistent Storage
+
+**Settings with Hive:**
 
 ```dart
 // Save setting
-await boxSettings.put('key', value);
+await boxSettings.put('autolaunch', true);
 
 // Load setting
-final value = boxSettings.get('key', defaultValue: 'default');
+final autolaunch = boxSettings.get('autolaunch', defaultValue: false);
 ```
 
-### Logging
+**Data storage:**
 
-Logs are written to `~/Documents/ArcaneDock/arcane_dock.log`:
+```dart
+// Save data
+await box.put('key', value);
+
+// Load data
+final value = box.get('key', defaultValue: 'default');
+```
+
+## Logging
+
+Logs written to `~/Documents/ArcaneDock/arcane_dock.log`:
 
 ```dart
 info('Information message');
@@ -230,81 +204,93 @@ success('Success message');
 
 Log file automatically rotates when exceeding 1MB.
 
-## 🎯 Common Use Cases
+## Platform-Specific Notes
 
-### System Monitor
+**macOS:**
 
-Monitor system resources and display in popup:
+`LSUIElement` set to `true` in `Info.plist` to hide dock icon. App only appears in menu bar.
+
+Platform channel code in `MainFlutterWindow.swift` enables `launch_at_startup` plugin.
+
+**Linux:**
+
+Requires `libappindicator3-dev`:
+```bash
+sudo apt-get install libappindicator3-dev  # Ubuntu/Debian
+sudo dnf install libappindicator-gtk3-devel # Fedora
+```
+
+GNOME users: Install [AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/)
+
+**Windows:**
+
+No additional setup required. Tray icon works out of the box.
+
+## Common Use Cases
+
+**System monitor:**
 
 ```dart
-// Add to dock_screen.dart
-Timer.periodic(Duration(seconds: 1), (timer) {
-  final cpuUsage = getCPUUsage();
-  final memoryUsage = getMemoryUsage();
-  setState(() {
-    // Update UI
-  });
+Timer.periodic(Duration(seconds: 5), (timer) {
+  final status = checkSystemStatus();
+  updateTrayIcon(status);
+  setState(() => _status = status);
 });
 ```
 
-### Clipboard Manager
-
-Monitor clipboard and show history:
+**Clipboard manager:**
 
 ```dart
-// Add clipboard monitoring
-import 'package:flutter/services.dart';
-
 Timer.periodic(Duration(milliseconds: 500), (timer) async {
   final data = await Clipboard.getData('text/plain');
-  // Store and display clipboard history
+  if (data?.text != _lastClipboard) {
+    _addToHistory(data?.text);
+    _lastClipboard = data?.text;
+  }
 });
 ```
 
-### Quick Notes
-
-Persistent notes accessible from tray:
+**API dashboard:**
 
 ```dart
-// Save notes to Hive
-await box.put('notes', notesList);
-
-// Display in popup
-final notes = box.get('notes', defaultValue: <String>[]);
-```
-
-### API Dashboard
-
-Display API status or data:
-
-```dart
-// Fetch data periodically
 Timer.periodic(Duration(minutes: 5), (timer) async {
   final response = await http.get(apiUrl);
-  setState(() {
-    // Update UI with API data
-  });
+  setState(() => _data = jsonDecode(response.body));
 });
 ```
 
-## 📝 Scripts
+## Best Practices
 
-Convenient dart run scripts in pubspec.yaml:
+**Keep window lightweight:**
 
-```bash
-# macOS CocoaPods
-dart run pod_install_macos
+Popup should load instantly. Avoid heavy operations in build().
 
-# Generate icons
-dart run gen_icons
+**Handle errors silently:**
+
+Tray apps run in background. Log errors instead of showing dialogs.
+
+**Minimize resource usage:**
+
+Use reasonable timer intervals. Cancel timers when not needed.
+
+**Update tray icon for status:**
+
+```dart
+await trayManager.setIcon(
+  isOnline ? 'assets/tray_online.png' : 'assets/tray_offline.png',
+  isTemplate: Platform.isMacOS,
+);
 ```
 
-## 🐛 Troubleshooting
+**Test on all platforms:**
 
-### macOS: App shows in Dock
+Behavior varies by platform. Use platform checks when needed.
 
-**Solution:** Add `LSUIElement` to `macos/Runner/Info.plist`:
+## Troubleshooting
 
+**macOS: App shows in Dock**
+
+Add `LSUIElement` to `macos/Runner/Info.plist`:
 ```xml
 <key>LSUIElement</key>
 <true/>
@@ -312,266 +298,57 @@ dart run gen_icons
 
 Then rebuild:
 ```bash
-flutter clean
-flutter run -d macos
+flutter clean && flutter run -d macos
 ```
 
-### Linux: Tray icon not showing
+**Linux: Tray icon not showing**
 
-**Solutions:**
+Install system tray support and enable in desktop environment (see Platform-Specific Notes).
 
-1. Install system tray support:
-```bash
-# Ubuntu/Debian
-sudo apt-get install libappindicator3-dev
+**Windows: Window position incorrect**
 
-# Fedora
-sudo dnf install libappindicator-gtk3-devel
-```
-
-2. Enable system tray in your desktop environment:
-   - **GNOME**: Install [AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/)
-   - **KDE/XFCE**: Usually enabled by default
-
-### Windows: Window position incorrect
-
-**Solution:** Ensure screen_retriever is working:
-
+Debug screen detection:
 ```dart
-// Debug window position
 final Display display = await screenRetriever.getPrimaryDisplay();
-print('Screen size: ${display.size}');
-
 final Offset cursor = await screenRetriever.getCursorScreenPoint();
-print('Cursor position: $cursor');
+print('Screen: ${display.size}, Cursor: $cursor');
 ```
 
-### All Platforms: Window doesn't hide on blur
+**CocoaPods fails**
 
-**Solution:** Verify window listener is registered:
-
-```dart
-// In WindowManager.init()
-wm.windowManager.addListener(HideOnBlurWindowListener());
-```
-
-### CocoaPods installation fails
-
-**Solution:** Clean and retry:
-
+Clean and retry:
 ```bash
-cd macos
-rm -rf Pods Podfile.lock
-pod install --repo-update
-cd ..
+cd macos && rm -rf Pods Podfile.lock && pod install --repo-update && cd ..
 ```
 
-## 📚 Dependencies
+**Plugin exception (macOS)**
 
-| Package | Purpose |
-|---------|---------|
-| `arcane` | UI framework (no Material Design) |
-| `tray_manager` | System tray icon and menu |
-| `window_manager` | Window positioning and management |
-| `screen_retriever` | Get screen info and cursor position |
-| `flutter_acrylic` | Window blur and transparency effects |
-| `launch_at_startup` | Autolaunch configuration |
-| `hive` | Local data persistence |
-| `fast_log` | Logging system |
+Ensure `MainFlutterWindow.swift` has platform channel code for `launch_at_startup`. Template includes this automatically.
 
-## 🔗 Related Documentation
+## Dependencies
 
-- **[PLATFORM_SETUP.md](PLATFORM_SETUP.md)** - Platform-specific configuration
-- **[Main README](../README.md)** - All Arcane templates
-- **[tray_manager](https://pub.dev/packages/tray_manager)** - Tray manager package
-- **[window_manager](https://pub.dev/packages/window_manager)** - Window manager package
+Core packages:
+- arcane - UI framework
+- tray_manager - System tray icon and menu
+- window_manager - Window positioning
+- screen_retriever - Screen info and cursor position
+- flutter_acrylic - Window blur effects
+- launch_at_startup - Autolaunch configuration
+- hive/hive_flutter - Persistent storage
+- fast_log - Logging
 
-## 🎓 Examples
+## Documentation
 
-### Simple Status Indicator
+- [Main README](../README.md) - All templates overview
+- [tray_manager](https://pub.dev/packages/tray_manager) - Tray manager package docs
+- [window_manager](https://pub.dev/packages/window_manager) - Window manager package docs
+- [ArcaneDesign.txt](../SoftwareThings/ArcaneDesign.txt) - Complete component reference
 
-```dart
-class StatusIndicator extends StatefulWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Tile(
-      leading: Icon(
-        isOnline ? Icons.check_circle : Icons.error,
-        color: isOnline ? Colors.green : Colors.red,
-      ),
-      titleText: isOnline ? 'Online' : 'Offline',
-      subtitleText: 'Last checked: $lastChecked',
-    );
-  }
-}
-```
+## Related Templates
 
-### Custom Tray Menu
+- **arcane_template** - Basic multi-platform template
+- **arcane_beamer** - Template with Beamer navigation
+- **server_template** - Backend server
+- **models_template** - Shared data models
 
-```dart
-// In WindowManager.initSystemTray()
-final Menu menu = Menu(
-  items: [
-    MenuItem(key: 'status', label: isOnline ? '● Online' : '● Offline'),
-    MenuItem.separator(),
-    MenuItem(key: 'refresh', label: 'Refresh'),
-    MenuItem(key: 'settings', label: 'Settings...'),
-    MenuItem.separator(),
-    MenuItem(key: 'about', label: 'About'),
-    MenuItem(key: 'exit', label: 'Quit'),
-  ],
-);
-```
-
-### Window with Sections
-
-```dart
-Screen(
-  child: Collection(
-    children: [
-      Section(
-        titleText: 'Status',
-        children: [
-          // Status tiles
-        ],
-      ),
-      Section(
-        titleText: 'Actions',
-        children: [
-          // Action buttons
-        ],
-      ),
-      Section(
-        titleText: 'Settings',
-        children: [
-          // Settings toggles
-        ],
-      ),
-    ],
-  ).padded(),
-)
-```
-
-## 🚀 Building for Production
-
-### macOS
-
-```bash
-# Build app bundle
-flutter build macos --release
-
-# Sign (if you have a developer certificate)
-cd build/macos/Build/Products/Release
-codesign --deep --force --verify --sign "Your Identity" YourApp.app
-
-# Create DMG (requires appdmg: npm install -g appdmg)
-# Configure distribute_options.yaml first
-flutter_distributor package --platform macos --targets dmg
-```
-
-### Linux
-
-```bash
-# Build
-flutter build linux --release
-
-# Package as AppImage or create .deb
-# See flutter_distributor for packaging options
-```
-
-### Windows
-
-```bash
-# Build
-flutter build windows --release
-
-# Create installer with Inno Setup or similar
-```
-
-## 🎯 Best Practices
-
-### 1. Keep Window Lightweight
-
-The popup window should load instantly:
-
-```dart
-// ✅ Good - Simple, fast UI
-Widget build(BuildContext context) {
-  return Screen(
-    child: Collection(
-      children: [
-        // Simple tiles and sections
-      ],
-    ).padded(),
-  );
-}
-
-// ❌ Bad - Heavy, slow operations
-Widget build(BuildContext context) {
-  final data = await fetchHeavyData();  // Don't block build
-  return ComplexWidget(data: data);
-}
-```
-
-### 2. Handle Errors Gracefully
-
-Tray apps run in the background, handle errors silently:
-
-```dart
-try {
-  await riskyOperation();
-} catch (e) {
-  error('Operation failed: $e');
-  // Don't show error dialogs, just log
-}
-```
-
-### 3. Minimize Resource Usage
-
-Your app runs constantly, be efficient:
-
-```dart
-// Use timers wisely
-Timer.periodic(Duration(minutes: 5), (timer) {
-  // Check status every 5 minutes, not every second
-});
-
-// Cancel timers when not needed
-@override
-void dispose() {
-  timer?.cancel();
-  super.dispose();
-}
-```
-
-### 4. Provide Visual Feedback
-
-Update tray icon to reflect status:
-
-```dart
-// Show status in tray icon
-await trayManager.setIcon(
-  isOnline ? 'assets/tray_online.png' : 'assets/tray_offline.png',
-  isTemplate: Platform.isMacOS,
-);
-```
-
-### 5. Test on All Platforms
-
-Behavior varies by platform:
-
-```dart
-if (Platform.isMacOS) {
-  // macOS-specific behavior
-} else if (Platform.isWindows) {
-  // Windows-specific behavior
-} else if (Platform.isLinux) {
-  // Linux-specific behavior
-}
-```
-
----
-
-**Built with Arcane** 🚀 - Material Design-free Flutter UI
-
-For more information, see the [main Arcane templates README](../README.md).
+See [main README](../README.md) for details.
