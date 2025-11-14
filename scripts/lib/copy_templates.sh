@@ -23,6 +23,12 @@ copy_models_template() {
 
     log_info "Copying models template structure..."
 
+    # Copy pubspec.yaml
+    if [ -f "$models_template/pubspec.yaml" ]; then
+        cp "$models_template/pubspec.yaml" "$models_name/pubspec.yaml" || return 1
+        log_success "Copied models pubspec.yaml"
+    fi
+
     # Copy lib directory
     cp -r "$models_template/lib" "$models_name/" || return 1
 
@@ -62,6 +68,12 @@ copy_server_template() {
     fi
 
     log_info "Copying server template structure..."
+
+    # Copy pubspec.yaml
+    if [ -f "$server_template/pubspec.yaml" ]; then
+        cp "$server_template/pubspec.yaml" "$server_name/pubspec.yaml" || return 1
+        log_success "Copied server pubspec.yaml"
+    fi
 
     # Copy lib directory
     cp -r "$server_template/lib" "$server_name/" || return 1
