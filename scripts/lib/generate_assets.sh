@@ -4,8 +4,8 @@
 # Generates app icons and splash screens for all platforms
 
 # Source utilities
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/utils.sh"
+LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$LIB_DIR/utils.sh"
 
 generate_launcher_icons() {
     local app_name="$1"

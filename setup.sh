@@ -23,6 +23,7 @@ source "$SCRIPT_DIR/scripts/lib/deploy_firebase.sh"
 CONFIG_FILE="config/setup_config.env"
 
 # Main setup function
+
 main() {
     print_banner
 

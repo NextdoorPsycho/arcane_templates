@@ -4,8 +4,8 @@
 # Deploys Firestore rules, Storage rules, and web app to Firebase Hosting
 
 # Source utilities
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/utils.sh"
+LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$LIB_DIR/utils.sh"
 
 deploy_firestore() {
     log_step "Deploying Firestore Rules and Indexes"

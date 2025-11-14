@@ -4,8 +4,8 @@
 # Verifies that required and optional CLI tools are installed
 
 # Source utilities
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/utils.sh"
+LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$LIB_DIR/utils.sh"
 
 check_cli_tools() {
     log_step "Checking Required CLI Tools"

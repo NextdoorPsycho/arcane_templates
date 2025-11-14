@@ -4,8 +4,8 @@
 # Creates Dockerfiles and configuration for server deployment
 
 # Source utilities
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/utils.sh"
+LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$LIB_DIR/utils.sh"
 
 create_server_dockerfile() {
     local app_name="$1"
