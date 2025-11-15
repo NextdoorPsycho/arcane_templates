@@ -23,6 +23,234 @@ source "$SCRIPT_DIR/scripts/lib/deploy_firebase.sh"
 # Configuration file
 CONFIG_FILE="config/setup_config.env"
 
+# Global flags for non-interactive mode
+FLAG_NON_INTERACTIVE=false
+FLAG_SKIP_CONFIRM=false
+FLAG_SKIP_CLI_CHECK=false
+FLAG_WORK_DIR=""
+FLAG_APP_NAME=""
+FLAG_ORG_DOMAIN=""
+FLAG_BASE_CLASS_NAME=""
+FLAG_TEMPLATE=""
+FLAG_WITH_MODELS=""
+FLAG_WITH_SERVER=""
+FLAG_WITH_FIREBASE=""
+FLAG_FIREBASE_PROJECT_ID=""
+FLAG_WITH_CLOUD_RUN=""
+FLAG_SERVICE_ACCOUNT_KEY=""
+FLAG_SKIP_DEPLOY=""
+
+# Parse command-line flags
+parse_flags() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                show_help
+                exit 0
+                ;;
+            --rebuild|-r)
+                # This is handled in main() for backward compatibility
+                shift
+                ;;
+            --non-interactive|-n)
+                FLAG_NON_INTERACTIVE=true
+                shift
+                ;;
+            --skip-confirm)
+                FLAG_SKIP_CONFIRM=true
+                shift
+                ;;
+            --skip-cli-check)
+                FLAG_SKIP_CLI_CHECK=true
+                shift
+                ;;
+            --work-dir|--output-dir)
+                FLAG_WORK_DIR="$2"
+                shift 2
+                ;;
+            --app-name|--name)
+                FLAG_APP_NAME="$2"
+                shift 2
+                ;;
+            --org|--organization)
+                FLAG_ORG_DOMAIN="$2"
+                shift 2
+                ;;
+            --class-name|--base-class)
+                FLAG_BASE_CLASS_NAME="$2"
+                shift 2
+                ;;
+            --template)
+                FLAG_TEMPLATE="$2"
+                shift 2
+                ;;
+            --with-models|--models)
+                FLAG_WITH_MODELS="yes"
+                shift
+                ;;
+            --with-server|--server)
+                FLAG_WITH_SERVER="yes"
+                shift
+                ;;
+            --with-firebase|--firebase)
+                FLAG_WITH_FIREBASE="yes"
+                shift
+                ;;
+            --firebase-project-id|--firebase-id)
+                FLAG_FIREBASE_PROJECT_ID="$2"
+                shift 2
+                ;;
+            --with-cloud-run|--cloud-run)
+                FLAG_WITH_CLOUD_RUN="yes"
+                shift
+                ;;
+            --service-account-key|--key-file)
+                FLAG_SERVICE_ACCOUNT_KEY="$2"
+                shift 2
+                ;;
+            --skip-deploy)
+                FLAG_SKIP_DEPLOY="yes"
+                shift
+                ;;
+            *)
+                log_error "Unknown flag: $1"
+                log_info "Run './setup.sh --help' for usage information"
+                exit 1
+                ;;
+        esac
+    done
+}
+
+# Validate all required flags for non-interactive mode
+validate_flags() {
+    if [ "$FLAG_NON_INTERACTIVE" != true ]; then
+        return 0
+    fi
+
+    local missing_flags=()
+
+    if [ -z "$FLAG_APP_NAME" ]; then
+        missing_flags+=("--app-name")
+    fi
+
+    if [ -z "$FLAG_ORG_DOMAIN" ]; then
+        missing_flags+=("--org")
+    fi
+
+    if [ -z "$FLAG_TEMPLATE" ]; then
+        missing_flags+=("--template")
+    fi
+
+    if [ "$FLAG_WITH_FIREBASE" = "yes" ] && [ -z "$FLAG_FIREBASE_PROJECT_ID" ]; then
+        missing_flags+=("--firebase-project-id (required when --with-firebase is set)")
+    fi
+
+    if [ ${#missing_flags[@]} -gt 0 ]; then
+        log_error "Non-interactive mode requires the following flags:"
+        for flag in "${missing_flags[@]}"; do
+            log_error "  $flag"
+        done
+        echo ""
+        log_info "Run './setup.sh --help' for usage information"
+        exit 1
+    fi
+
+    # Validate flag values
+    if ! validate_app_name "$FLAG_APP_NAME"; then
+        log_error "Invalid app name: $FLAG_APP_NAME"
+        exit 1
+    fi
+
+    if ! validate_not_empty "$FLAG_ORG_DOMAIN"; then
+        log_error "Invalid organization domain: $FLAG_ORG_DOMAIN"
+        exit 1
+    fi
+
+    case "$FLAG_TEMPLATE" in
+        1|arcane_template|2|arcane_beamer|3|arcane_dock)
+            # Valid template
+            ;;
+        *)
+            log_error "Invalid template: $FLAG_TEMPLATE"
+            log_error "Must be one of: 1, arcane_template, 2, arcane_beamer, 3, arcane_dock"
+            exit 1
+            ;;
+    esac
+
+    if [ "$FLAG_WITH_FIREBASE" = "yes" ] && ! validate_firebase_project_id "$FLAG_FIREBASE_PROJECT_ID"; then
+        log_error "Invalid Firebase project ID: $FLAG_FIREBASE_PROJECT_ID"
+        exit 1
+    fi
+
+    log_success "All flags validated successfully"
+}
+
+# Apply flags to configuration variables
+apply_flags() {
+    if [ -n "$FLAG_APP_NAME" ]; then
+        APP_NAME="$FLAG_APP_NAME"
+    fi
+
+    if [ -n "$FLAG_ORG_DOMAIN" ]; then
+        ORG_DOMAIN="$FLAG_ORG_DOMAIN"
+    fi
+
+    if [ -n "$FLAG_BASE_CLASS_NAME" ]; then
+        BASE_CLASS_NAME="$FLAG_BASE_CLASS_NAME"
+    fi
+
+    if [ -n "$FLAG_TEMPLATE" ]; then
+        case "$FLAG_TEMPLATE" in
+            1|arcane_template)
+                TEMPLATE_DIR="$SCRIPT_DIR/arcane_template"
+                TEMPLATE_NAME="arcane_template"
+                PLATFORMS="android,ios,web,linux,windows,macos"
+                ;;
+            2|arcane_beamer)
+                TEMPLATE_DIR="$SCRIPT_DIR/arcane_beamer"
+                TEMPLATE_NAME="arcane_beamer"
+                PLATFORMS="android,ios,web,linux,windows,macos"
+                ;;
+            3|arcane_dock)
+                TEMPLATE_DIR="$SCRIPT_DIR/arcane_dock"
+                TEMPLATE_NAME="arcane_dock"
+                PLATFORMS="linux,windows,macos"
+                ;;
+        esac
+    fi
+
+    if [ -n "$FLAG_WITH_MODELS" ]; then
+        CREATE_MODELS="$FLAG_WITH_MODELS"
+    fi
+
+    if [ -n "$FLAG_WITH_SERVER" ]; then
+        CREATE_SERVER="$FLAG_WITH_SERVER"
+    fi
+
+    if [ -n "$FLAG_WITH_FIREBASE" ]; then
+        USE_FIREBASE="$FLAG_WITH_FIREBASE"
+    fi
+
+    if [ -n "$FLAG_FIREBASE_PROJECT_ID" ]; then
+        FIREBASE_PROJECT_ID="$FLAG_FIREBASE_PROJECT_ID"
+    fi
+
+    if [ -n "$FLAG_WITH_CLOUD_RUN" ]; then
+        SETUP_CLOUD_RUN="$FLAG_WITH_CLOUD_RUN"
+    fi
+
+    # Set defaults for optional components if not specified
+    CREATE_MODELS="${CREATE_MODELS:-no}"
+    CREATE_SERVER="${CREATE_SERVER:-no}"
+    USE_FIREBASE="${USE_FIREBASE:-no}"
+    SETUP_CLOUD_RUN="${SETUP_CLOUD_RUN:-no}"
+
+    # Auto-derive base class name if not provided
+    if [ -z "$BASE_CLASS_NAME" ] && [ -n "$APP_NAME" ]; then
+        BASE_CLASS_NAME=$(snake_to_pascal "$APP_NAME")
+    fi
+}
+
 # Main setup function
 
 load_existing_config() {
@@ -56,6 +284,47 @@ load_existing_config() {
 }
 
 select_working_directory() {
+    # If work directory was provided via flag, use it
+    if [ -n "$FLAG_WORK_DIR" ]; then
+        local target_dir="${FLAG_WORK_DIR/#\~/$HOME}"
+
+        # Check if directory exists
+        if [ ! -d "$target_dir" ]; then
+            if [ "$FLAG_NON_INTERACTIVE" = true ]; then
+                log_error "Directory does not exist: $target_dir"
+                exit 1
+            else
+                log_warning "Directory does not exist: $target_dir"
+                if confirm "Do you want to create it?"; then
+                    if ! mkdir -p "$target_dir" 2>/dev/null; then
+                        log_error "Failed to create directory: $target_dir"
+                        exit 1
+                    fi
+                    log_success "Created directory: $target_dir"
+                else
+                    log_error "Cannot continue without valid directory"
+                    exit 1
+                fi
+            fi
+        fi
+
+        # Check write permissions
+        if [ ! -w "$target_dir" ]; then
+            log_error "No write permission for directory: $target_dir"
+            exit 1
+        fi
+
+        # Change to the directory
+        if ! cd "$target_dir" 2>/dev/null; then
+            log_error "Failed to change to directory: $target_dir"
+            exit 1
+        fi
+
+        log_success "Using working directory: $(pwd)"
+        return 0
+    fi
+
+    # Interactive mode
     log_info "Current directory: $(pwd)"
     log_instruction "Projects will be created as subdirectories in this location."
     echo ""
@@ -115,61 +384,191 @@ show_help() {
     cat << EOF
 Arcane Template Setup Wizard
 
-Usage: ./setup.sh [OPTIONS]
+Create a complete Flutter application with Arcane UI framework, including client,
+models package, and server projects.
 
-OPTIONS:
-    --rebuild, -r     Hint to check for existing configuration (optional)
-                      The script will always check for config/setup_config.env in the
-                      selected directory and offer to rebuild if found
+USAGE:
+    ./setup.sh [OPTIONS]
 
-    --help, -h        Show this help message
+MODES:
+    Interactive Mode (default):  Prompts for all configuration options
+    Non-Interactive Mode:        Requires all mandatory flags, no prompts
 
-EXAMPLES:
-    # Create a new project (interactive mode)
+CONFIGURATION FLAGS:
+    --app-name NAME              App name (lowercase_with_underscores)
+                                 Example: my_awesome_app
+
+    --org DOMAIN                 Organization domain (reverse domain notation)
+                                 Example: com.mycompany, art.arcane
+                                 Default: art.arcane
+
+    --template TEMPLATE          Template to use. Options:
+                                   1 or arcane_template  - Basic Arcane (all platforms)
+                                   2 or arcane_beamer    - With Beamer navigation
+                                   3 or arcane_dock      - System tray (desktop only)
+                                 Default: arcane_template
+
+    --class-name NAME            Base class name (PascalCase)
+                                 Default: Auto-derived from app name
+                                 Example: MyAwesomeApp
+
+    --work-dir PATH              Working directory for project creation
+                                 Default: Current directory
+
+PROJECT STRUCTURE FLAGS:
+    --with-models                Create shared models package
+    --models                     Alias for --with-models
+
+    --with-server                Create backend server app
+    --server                     Alias for --with-server
+
+FIREBASE FLAGS:
+    --with-firebase              Enable Firebase integration
+    --firebase                   Alias for --with-firebase
+
+    --firebase-project-id ID     Firebase project ID (required if --with-firebase)
+                                 Example: my-firebase-project
+
+    --with-cloud-run             Setup Google Cloud Run for server deployment
+    --cloud-run                  Alias for --with-cloud-run
+                                 (requires --with-server and --with-firebase)
+
+    --service-account-key PATH   Path to Google Cloud service account JSON key
+                                 Will be copied to config/keys/ directory
+
+BEHAVIOR FLAGS:
+    --non-interactive, -n        Non-interactive mode (fail if required flags missing)
+                                 Required flags: --app-name, --org, --template
+                                 Also requires --firebase-project-id if using --with-firebase
+
+    --skip-confirm               Skip final confirmation prompts
+
+    --skip-cli-check             Skip CLI tool verification (not recommended)
+
+    --skip-deploy                Skip optional Firebase deployment at end
+
+    --rebuild, -r                Hint to check for existing configuration
+                                 Still prompts for directory selection
+
+    --help, -h                   Show this help message
+
+INTERACTIVE MODE EXAMPLES:
+    # Basic interactive setup
     ./setup.sh
 
-    # Suggest rebuild mode (still asks for directory)
+    # Interactive with some defaults pre-filled
+    ./setup.sh --app-name my_app --org com.mycompany
+
+    # Rebuild existing project
     ./setup.sh --rebuild
 
-    # Show help
-    ./setup.sh --help
+NON-INTERACTIVE MODE EXAMPLES:
+    # Minimal setup (basic app, no Firebase)
+    ./setup.sh \\
+      --non-interactive \\
+      --app-name my_app \\
+      --org com.mycompany \\
+      --template arcane_template
 
-HOW IT WORKS:
-    1. Select working directory (always prompted)
-    2. Check for config/setup_config.env in that directory
-    3. If found: offer to rebuild with those settings
-    4. If not found OR you decline rebuild: run interactive setup
-    5. Configuration saved to config/setup_config.env for next time
+    # Full stack with Firebase (interactive Firebase steps)
+    ./setup.sh \\
+      --app-name my_app \\
+      --org com.mycompany \\
+      --template arcane_beamer \\
+      --with-models \\
+      --with-server \\
+      --with-firebase \\
+      --firebase-project-id my-firebase-project
 
-REBUILD FLOW:
-    - Shows summary of saved configuration
-    - Asks if you want to rebuild with these settings
-    - If yes: warns about deleting existing directories
-    - If confirmed: deletes old projects and rebuilds
-    - If declined: proceeds with fresh interactive setup
+    # Complete non-interactive setup
+    ./setup.sh \\
+      --non-interactive \\
+      --work-dir ~/projects \\
+      --app-name my_app \\
+      --org com.mycompany \\
+      --template arcane_beamer \\
+      --with-models \\
+      --with-server \\
+      --with-firebase \\
+      --firebase-project-id my-firebase-project \\
+      --with-cloud-run \\
+      --skip-deploy
 
-NOTES:
-    - Configuration is saved to config/setup_config.env after each run
-    - Rebuild will prompt before deleting existing project directories
-    - You can always do a fresh setup even with existing config (it will be overwritten)
+    # Desktop tray app with server
+    ./setup.sh \\
+      --non-interactive \\
+      --app-name my_tray_app \\
+      --org art.arcane \\
+      --template arcane_dock \\
+      --with-server
+
+CONFIGURATION FILE:
+    After setup, configuration is saved to config/setup_config.env
+    This allows easy rebuilds with the same settings.
+
+    Location: <working_directory>/config/setup_config.env
+
+    To rebuild with saved config:
+      1. cd to the directory containing config/setup_config.env
+      2. Run: ./setup.sh --rebuild
+      3. Confirm rebuild when prompted
+
+WORKFLOW:
+    1. Parse command-line flags
+    2. Select working directory (FLAG: --work-dir)
+    3. Check for existing config file
+    4. Verify CLI tools (unless --skip-cli-check)
+    5. Gather project configuration (interactive or from flags)
+    6. Create projects (client, models, server)
+    7. Setup Firebase (if enabled)
+    8. Generate configuration files
+    9. Setup Docker and deployment scripts
+    10. Optional Firebase deployment
+
+REQUIRED TOOLS:
+    Always Required:
+      - Flutter SDK
+      - Dart SDK
+
+    Optional (required for some features):
+      - Firebase CLI (for --with-firebase)
+      - gcloud CLI (for --with-cloud-run)
+      - Docker (for server deployment)
+
+MORE INFO:
+    Documentation: https://github.com/arcanearts/arcane_templates
+    Issues: https://github.com/arcanearts/arcane_templates/issues
 
 EOF
 }
 
 main() {
-    # Check for help flag
-    if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-        show_help
-        exit 0
-    fi
+    # Parse command-line flags first
+    parse_flags "$@"
+
+    # Validate flags (if in non-interactive mode)
+    validate_flags
+
+    # Apply flags to configuration variables
+    apply_flags
 
     print_banner
 
-    # Check for rebuild flag (used as a hint)
+    # Check for rebuild flag in remaining args
     local REBUILD_HINT=false
-    if [ "$1" = "--rebuild" ] || [ "$1" = "-r" ]; then
-        REBUILD_HINT=true
+    for arg in "$@"; do
+        if [ "$arg" = "--rebuild" ] || [ "$arg" = "-r" ]; then
+            REBUILD_HINT=true
+            break
+        fi
+    done
+
+    if [ "$REBUILD_HINT" = true ]; then
         log_info "Rebuild mode - will check for existing configuration after selecting directory"
+        echo ""
+    elif [ "$FLAG_NON_INTERACTIVE" = true ]; then
+        log_info "Non-interactive mode - using provided flags"
+        log_info "Creating Flutter app with Arcane UI framework"
         echo ""
     else
         log_info "Welcome to the Arcane Template Setup Wizard!"
@@ -177,12 +576,6 @@ main() {
         log_info "with the Arcane UI framework, including client, models, and server."
         echo ""
     fi
-
-    # Set defaults for optional components
-    CREATE_MODELS="no"
-    CREATE_SERVER="no"
-    USE_FIREBASE="no"
-    SETUP_CLOUD_RUN="no"
 
     # Always select working directory first
     select_working_directory
@@ -249,17 +642,24 @@ main() {
         REBUILD_MODE=false
     fi
 
-    if ! confirm "Ready to continue?"; then
-        log_warning "Setup cancelled by user"
-        exit 0
+    if [ "$FLAG_SKIP_CONFIRM" != true ]; then
+        if ! confirm "Ready to continue?"; then
+            log_warning "Setup cancelled by user"
+            exit 0
+        fi
     fi
 
     # Step 1: Check CLI tools
-    print_header "Step 1: Checking CLI Tools"
-    check_cli_tools || exit 1
+    if [ "$FLAG_SKIP_CLI_CHECK" != true ]; then
+        print_header "Step 1: Checking CLI Tools"
+        check_cli_tools || exit 1
+    else
+        log_info "Skipping CLI tool verification (--skip-cli-check)"
+        echo ""
+    fi
 
-    # Skip interactive prompts if in rebuild mode
-    if [ "$REBUILD_MODE" != true ]; then
+    # Skip interactive prompts if in rebuild mode or if flags provided all config
+    if [ "$REBUILD_MODE" != true ] && [ "$FLAG_NON_INTERACTIVE" != true ]; then
         # Step 2: Gather project information
         print_header "Step 2: Project Configuration"
         gather_project_info
@@ -276,10 +676,22 @@ main() {
         print_header "Step 5: Configuration Summary"
         show_configuration_summary
 
-        if ! confirm "Proceed with these settings?"; then
-            log_warning "Setup cancelled by user"
-            exit 0
+        if [ "$FLAG_SKIP_CONFIRM" != true ]; then
+            if ! confirm "Proceed with these settings?"; then
+                log_warning "Setup cancelled by user"
+                exit 0
+            fi
         fi
+
+        # Save configuration
+        save_configuration
+    elif [ "$FLAG_NON_INTERACTIVE" = true ]; then
+        log_info "Using flags - skipping interactive setup"
+        echo ""
+
+        # Show summary in non-interactive mode
+        show_configuration_summary
+        echo ""
 
         # Save configuration
         save_configuration
@@ -358,7 +770,16 @@ main() {
     # Step 20: Optional Firebase deployment
     if [ "$USE_FIREBASE" = "yes" ]; then
         print_header "Step 20: Firebase Deployment (Optional)"
-        if confirm "Do you want to deploy Firebase resources now?"; then
+        if [ "$FLAG_SKIP_DEPLOY" = "yes" ]; then
+            log_info "Skipping Firebase deployment (--skip-deploy)"
+            log_info "You can deploy Firebase resources later using:"
+            log_instruction "  firebase deploy --only firestore"
+            log_instruction "  firebase deploy --only storage"
+            log_instruction "  firebase deploy --only hosting"
+        elif [ "$FLAG_NON_INTERACTIVE" = true ]; then
+            log_info "Non-interactive mode: Deploying Firebase resources automatically"
+            deploy_all_firebase "$APP_NAME"
+        elif confirm "Do you want to deploy Firebase resources now?"; then
             deploy_all_firebase "$APP_NAME"
         else
             log_info "You can deploy Firebase resources later using:"
@@ -525,11 +946,27 @@ configure_firebase_options() {
             fi
         fi
 
-        if confirm "Have you created and downloaded the service account key?"; then
+        # Handle service account key
+        if [ -n "$FLAG_SERVICE_ACCOUNT_KEY" ]; then
+            # Copy provided key file
+            if [ -f "$FLAG_SERVICE_ACCOUNT_KEY" ]; then
+                cp "$FLAG_SERVICE_ACCOUNT_KEY" "$absolute_keys_path/"
+                log_success "Service account key copied to: $absolute_keys_path"
+            else
+                log_error "Service account key file not found: $FLAG_SERVICE_ACCOUNT_KEY"
+                if [ "$FLAG_NON_INTERACTIVE" = true ]; then
+                    exit 1
+                fi
+            fi
+        elif [ "$FLAG_NON_INTERACTIVE" = true ]; then
+            log_warning "No service account key provided (--service-account-key)"
+            log_info "You can add it later to config/keys/"
+        elif confirm "Have you created and downloaded the service account key?"; then
             # Keep checking until key is found
             local key_found=false
             while [ "$key_found" = false ]; do
-                local key_count=$(find config/keys -name "*.json" -type f 2>/dev/null | wc -l)
+                local key_count
+                key_count=$(find config/keys -name "*.json" -type f 2>/dev/null | wc -l)
 
                 if [ "$key_count" -eq 0 ]; then
                     log_warning "No JSON key files found in: $absolute_keys_path"
