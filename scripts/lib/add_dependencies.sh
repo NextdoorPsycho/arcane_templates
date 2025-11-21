@@ -144,12 +144,22 @@ add_all_dependencies() {
     local use_firebase="${2:-no}"
     local create_models="${3:-yes}"
     local create_server="${4:-yes}"
+    local create_cli="${5:-no}"
 
     log_info "Adding dependencies to projects..."
     echo ""
 
-    # Add to client app (always)
-    add_client_dependencies "$app_name" "$use_firebase" || return 1
+    # Add to client app (only if not using CLI as main app)
+    if [ "$create_cli" != "yes" ]; then
+        add_client_dependencies "$app_name" "$use_firebase" || return 1
+    else
+        log_info "Skipping client dependencies (using CLI as main app)"
+    fi
+
+    # Add to CLI app (if CLI is the main app)
+    if [ "$create_cli" = "yes" ]; then
+        add_cli_dependencies "$app_name" "$use_firebase" || return 1
+    fi
 
     # Add to models package (if created)
     if [ "$create_models" = "yes" ]; then
@@ -167,6 +177,28 @@ add_all_dependencies() {
 
     log_success "All dependencies added successfully!"
 
+    return 0
+}
+
+add_cli_dependencies() {
+    local app_name="$1"
+    local use_firebase="${2:-no}"
+    local cli_name="${app_name}_cli"
+
+    log_info "Installing CLI dependencies for $cli_name..."
+
+    cd "$cli_name" || return 1
+
+    echo ""
+    retry_command "Install CLI dependencies" dart pub get
+
+    if [ "$use_firebase" = "yes" ]; then
+        log_info "Firebase dependencies already configured in CLI pubspec"
+    fi
+
+    cd ..
+
+    log_success "CLI dependencies installed"
     return 0
 }
 

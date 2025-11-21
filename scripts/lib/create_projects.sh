@@ -89,42 +89,90 @@ create_server_app() {
     return $?
 }
 
+create_cli_app() {
+    local app_name="$1"
+    local cli_name="${app_name}_cli"
+
+    log_step "Creating CLI App: $cli_name"
+
+    if [ -d "$cli_name" ]; then
+        log_warning "Directory $cli_name already exists"
+        if ! confirm "Do you want to overwrite it?"; then
+            log_error "Cannot continue without creating the CLI app"
+            return 1
+        fi
+    fi
+
+    echo ""
+    retry_command "Create CLI app" dart create \
+        -t console \
+        --force \
+        "$cli_name"
+    return $?
+}
+
 link_models_to_projects() {
     local app_name="$1"
     local create_server="${2:-yes}"
+    local create_cli="${3:-no}"
     local models_name="${app_name}_models"
     local server_name="${app_name}_server"
+    local cli_name="${app_name}_cli"
 
-    log_step "Linking Models Package to Client"
-    if [ "$create_server" = "yes" ]; then
-        log_step "Linking Models Package to Client and Server"
-    fi
+    # Build log message based on what's being created
+    local targets="Client"
+    [ "$create_server" = "yes" ] && targets="$targets and Server"
+    [ "$create_cli" = "yes" ] && targets="$targets and CLI"
 
-    # Add models dependency to client app
-    log_info "Adding models dependency to $app_name..."
+    log_step "Linking Models Package to $targets"
 
-    # Find the line number where dependencies: section ends (before dev_dependencies or flutter section)
-    local insert_line=$(grep -n "^dev_dependencies:" "$app_name/pubspec.yaml" | cut -d: -f1)
-    if [ -z "$insert_line" ]; then
-        # If no dev_dependencies, insert before flutter section
-        insert_line=$(grep -n "^flutter:" "$app_name/pubspec.yaml" | cut -d: -f1)
-    fi
+    # Add models dependency to client app (unless it's a CLI-only project)
+    if [ "$create_cli" = "yes" ]; then
+        log_info "Adding models dependency to $cli_name..."
 
-    if [ -n "$insert_line" ]; then
-        # Insert before the found line
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "${insert_line}i\\
+        insert_line=$(grep -n "^dev_dependencies:" "$cli_name/pubspec.yaml" | cut -d: -f1)
+
+        if [ -n "$insert_line" ]; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "${insert_line}i\\
+\\
+  $models_name:\\
+    path: ../$models_name
+" "$cli_name/pubspec.yaml"
+            else
+                sed -i "${insert_line}i\\\\n  $models_name:\\n    path: ../$models_name" "$cli_name/pubspec.yaml"
+            fi
+            log_success "Added models dependency to CLI app"
+        else
+            log_error "Could not find insertion point in CLI pubspec.yaml"
+            return 1
+        fi
+    else
+        log_info "Adding models dependency to $app_name..."
+
+        # Find the line number where dependencies: section ends (before dev_dependencies or flutter section)
+        local insert_line=$(grep -n "^dev_dependencies:" "$app_name/pubspec.yaml" | cut -d: -f1)
+        if [ -z "$insert_line" ]; then
+            # If no dev_dependencies, insert before flutter section
+            insert_line=$(grep -n "^flutter:" "$app_name/pubspec.yaml" | cut -d: -f1)
+        fi
+
+        if [ -n "$insert_line" ]; then
+            # Insert before the found line
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "${insert_line}i\\
 \\
   $models_name:\\
     path: ../$models_name
 " "$app_name/pubspec.yaml"
+            else
+                sed -i "${insert_line}i\\\\n  $models_name:\\n    path: ../$models_name" "$app_name/pubspec.yaml"
+            fi
+            log_success "Added models dependency to client app"
         else
-            sed -i "${insert_line}i\\\\n  $models_name:\\n    path: ../$models_name" "$app_name/pubspec.yaml"
+            log_error "Could not find insertion point in pubspec.yaml"
+            return 1
         fi
-        log_success "Added models dependency to client app"
-    else
-        log_error "Could not find insertion point in pubspec.yaml"
-        return 1
     fi
 
     # Add models dependency to server app (if server is being created)
@@ -331,16 +379,25 @@ delete_test_folders() {
     local app_name="$1"
     local create_models="${2:-yes}"
     local create_server="${3:-yes}"
+    local is_cli="${4:-no}"
     local models_name="${app_name}_models"
     local server_name="${app_name}_server"
+    local cli_name="${app_name}_cli"
 
     log_step "Cleaning Up Test Folders"
 
-    # Always delete client app test folder
-    if [ -d "$app_name/test" ]; then
+    # Delete client app test folder (if not CLI template)
+    if [ "$is_cli" != "yes" ] && [ -d "$app_name/test" ]; then
         log_info "Removing $app_name/test..."
         rm -rf "$app_name/test"
         log_success "Removed $app_name/test"
+    fi
+
+    # Delete CLI test folder (if CLI template)
+    if [ "$is_cli" = "yes" ] && [ -d "$cli_name/test" ]; then
+        log_info "Removing $cli_name/test..."
+        rm -rf "$cli_name/test"
+        log_success "Removed $cli_name/test"
     fi
 
     # Delete models test folder if models package was created

@@ -34,6 +34,7 @@ FLAG_BASE_CLASS_NAME=""
 FLAG_TEMPLATE=""
 FLAG_WITH_MODELS=""
 FLAG_WITH_SERVER=""
+FLAG_WITH_CLI=""
 FLAG_WITH_FIREBASE=""
 FLAG_FIREBASE_PROJECT_ID=""
 FLAG_WITH_CLOUD_RUN=""
@@ -90,6 +91,10 @@ parse_flags() {
                 ;;
             --with-server|--server)
                 FLAG_WITH_SERVER="yes"
+                shift
+                ;;
+            --with-cli|--cli)
+                FLAG_WITH_CLI="yes"
                 shift
                 ;;
             --with-firebase|--firebase)
@@ -167,12 +172,12 @@ validate_flags() {
     fi
 
     case "$FLAG_TEMPLATE" in
-        1|arcane_template|2|arcane_beamer|3|arcane_dock)
+        1|arcane_template|2|arcane_beamer|3|arcane_dock|4|arcane_cli)
             # Valid template
             ;;
         *)
             log_error "Invalid template: $FLAG_TEMPLATE"
-            log_error "Must be one of: 1, arcane_template, 2, arcane_beamer, 3, arcane_dock"
+            log_error "Must be one of: 1, arcane_template, 2, arcane_beamer, 3, arcane_dock, 4, arcane_cli"
             exit 1
             ;;
     esac
@@ -216,6 +221,11 @@ apply_flags() {
                 TEMPLATE_NAME="arcane_dock"
                 PLATFORMS="linux,windows,macos"
                 ;;
+            4|arcane_cli)
+                TEMPLATE_DIR="$SCRIPT_DIR/arcane_cli"
+                TEMPLATE_NAME="arcane_cli"
+                PLATFORMS=""
+                ;;
         esac
     fi
 
@@ -225,6 +235,10 @@ apply_flags() {
 
     if [ -n "$FLAG_WITH_SERVER" ]; then
         CREATE_SERVER="$FLAG_WITH_SERVER"
+    fi
+
+    if [ -n "$FLAG_WITH_CLI" ]; then
+        CREATE_CLI="$FLAG_WITH_CLI"
     fi
 
     if [ -n "$FLAG_WITH_FIREBASE" ]; then
@@ -242,6 +256,7 @@ apply_flags() {
     # Set defaults for optional components if not specified
     CREATE_MODELS="${CREATE_MODELS:-no}"
     CREATE_SERVER="${CREATE_SERVER:-no}"
+    CREATE_CLI="${CREATE_CLI:-no}"
     USE_FIREBASE="${USE_FIREBASE:-no}"
     SETUP_CLOUD_RUN="${SETUP_CLOUD_RUN:-no}"
 
@@ -273,6 +288,7 @@ load_existing_config() {
     # Set defaults for optional variables if not present
     CREATE_MODELS="${CREATE_MODELS:-no}"
     CREATE_SERVER="${CREATE_SERVER:-no}"
+    CREATE_CLI="${CREATE_CLI:-no}"
     USE_FIREBASE="${USE_FIREBASE:-no}"
     SETUP_CLOUD_RUN="${SETUP_CLOUD_RUN:-no}"
     FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-}"
@@ -406,6 +422,7 @@ CONFIGURATION FLAGS:
                                    1 or arcane_template  - Basic Arcane (all platforms)
                                    2 or arcane_beamer    - With Beamer navigation
                                    3 or arcane_dock      - System tray (desktop only)
+                                   4 or arcane_cli       - CLI application (Dart only)
                                  Default: arcane_template
 
     --class-name NAME            Base class name (PascalCase)
@@ -421,6 +438,9 @@ PROJECT STRUCTURE FLAGS:
 
     --with-server                Create backend server app
     --server                     Alias for --with-server
+
+    --with-cli                   Create CLI application
+    --cli                        Alias for --with-cli
 
 FIREBASE FLAGS:
     --with-firebase              Enable Firebase integration
@@ -600,8 +620,15 @@ main() {
 
                 # Check if old project directories exist
                 local projects_exist=false
-                if [ -d "$APP_NAME" ]; then
-                    projects_exist=true
+                # Check for CLI or client app directory
+                if [ "$TEMPLATE_NAME" = "arcane_cli" ]; then
+                    if [ -d "${APP_NAME}_cli" ]; then
+                        projects_exist=true
+                    fi
+                else
+                    if [ -d "$APP_NAME" ]; then
+                        projects_exist=true
+                    fi
                 fi
                 if [ "$CREATE_MODELS" = "yes" ] && [ -d "${APP_NAME}_models" ]; then
                     projects_exist=true
@@ -620,7 +647,11 @@ main() {
 
                     # Delete existing directories
                     log_info "Removing existing project directories..."
-                    rm -rf "$APP_NAME" 2>/dev/null || true
+                    if [ "$TEMPLATE_NAME" = "arcane_cli" ]; then
+                        rm -rf "${APP_NAME}_cli" 2>/dev/null || true
+                    else
+                        rm -rf "$APP_NAME" 2>/dev/null || true
+                    fi
                     [ "$CREATE_MODELS" = "yes" ] && rm -rf "${APP_NAME}_models" 2>/dev/null || true
                     [ "$CREATE_SERVER" = "yes" ] && rm -rf "${APP_NAME}_server" 2>/dev/null || true
                     log_success "Old directories removed"
@@ -700,9 +731,14 @@ main() {
         echo ""
     fi
 
-    # Step 7: Create client project
-    print_header "Step 7: Creating Client Project"
-    create_client_app "$APP_NAME" "$ORG_DOMAIN" "$PLATFORMS" || exit 1
+    # Step 7: Create main project (CLI or Flutter app)
+    if [ "$TEMPLATE_NAME" = "arcane_cli" ]; then
+        print_header "Step 7: Creating CLI Application"
+        create_cli_app "$APP_NAME" || exit 1
+    else
+        print_header "Step 7: Creating Client Project"
+        create_client_app "$APP_NAME" "$ORG_DOMAIN" "$PLATFORMS" || exit 1
+    fi
 
     # Step 8: Create models and server (if requested)
     if [ "$CREATE_MODELS" = "yes" ]; then
@@ -718,7 +754,12 @@ main() {
     # Step 10: Link models to projects (if models package exists)
     if [ "$CREATE_MODELS" = "yes" ]; then
         print_header "Step 10: Linking Models Package"
-        link_models_to_projects "$APP_NAME" "$CREATE_SERVER" || exit 1
+        # For CLI template, pass "yes" for CLI linking
+        if [ "$TEMPLATE_NAME" = "arcane_cli" ]; then
+            link_models_to_projects "$APP_NAME" "$CREATE_SERVER" "yes" || exit 1
+        else
+            link_models_to_projects "$APP_NAME" "$CREATE_SERVER" "no" || exit 1
+        fi
     fi
 
     # Step 11: Copy models and server templates
@@ -732,13 +773,23 @@ main() {
         copy_server_template "$APP_NAME" "$SCRIPT_DIR" "$FIREBASE_PROJECT_ID" "$CREATE_MODELS" || exit 1
     fi
 
-    # Step 13: Copy template files (lib/, pubspec.yaml, assets/, etc.)
-    print_header "Step 13: Copying Template Files"
-    copy_template_files "$APP_NAME" "$TEMPLATE_DIR" "$FIREBASE_PROJECT_ID" || exit 1
+    # Step 13: Copy CLI or Flutter template files
+    if [ "$TEMPLATE_NAME" = "arcane_cli" ]; then
+        print_header "Step 13: Copying CLI Template Files"
+        copy_cli_template "$APP_NAME" "$SCRIPT_DIR" "$FIREBASE_PROJECT_ID" "$CREATE_MODELS" "$CREATE_SERVER" "$USE_FIREBASE" || exit 1
+    else
+        print_header "Step 13: Copying Template Files"
+        copy_template_files "$APP_NAME" "$TEMPLATE_DIR" "$FIREBASE_PROJECT_ID" || exit 1
+    fi
 
     # Step 14: Add dependencies
     print_header "Step 14: Adding Dependencies"
-    add_all_dependencies "$APP_NAME" "$USE_FIREBASE" "$CREATE_MODELS" "$CREATE_SERVER" "$PLATFORMS" || exit 1
+    # For CLI template, pass "yes" for CLI dependencies
+    if [ "$TEMPLATE_NAME" = "arcane_cli" ]; then
+        add_all_dependencies "$APP_NAME" "$USE_FIREBASE" "$CREATE_MODELS" "$CREATE_SERVER" "yes" || exit 1
+    else
+        add_all_dependencies "$APP_NAME" "$USE_FIREBASE" "$CREATE_MODELS" "$CREATE_SERVER" "no" || exit 1
+    fi
 
     # Step 15: Setup Firebase (if enabled)
     if [ "$USE_FIREBASE" = "yes" ]; then
@@ -752,10 +803,14 @@ main() {
         generate_all_configs "$APP_NAME" "$FIREBASE_PROJECT_ID"
     fi
 
-    # Step 17: Copy template assets
-    print_header "Step 17: Setting Up Assets"
-    copy_template_assets "$APP_NAME" "$TEMPLATE_DIR"
-    update_pubspec_for_assets "$APP_NAME"
+    # Step 17: Copy template assets (skip for CLI apps - no Flutter assets)
+    if [ "$TEMPLATE_NAME" != "arcane_cli" ]; then
+        print_header "Step 17: Setting Up Assets"
+        copy_template_assets "$APP_NAME" "$TEMPLATE_DIR"
+        update_pubspec_for_assets "$APP_NAME"
+    else
+        log_info "Skipping asset setup (CLI apps don't have Flutter assets)"
+    fi
 
     # Step 18: Setup server
     if [ "$CREATE_SERVER" = "yes" ]; then
@@ -765,7 +820,11 @@ main() {
 
     # Step 19: Clean up test folders
     print_header "Step 19: Cleaning Up Test Folders"
-    delete_test_folders "$APP_NAME" "$CREATE_MODELS" "$CREATE_SERVER"
+    if [ "$TEMPLATE_NAME" = "arcane_cli" ]; then
+        delete_test_folders "$APP_NAME" "$CREATE_MODELS" "$CREATE_SERVER" "yes"
+    else
+        delete_test_folders "$APP_NAME" "$CREATE_MODELS" "$CREATE_SERVER" "no"
+    fi
 
     # Step 20: Optional Firebase deployment
     if [ "$USE_FIREBASE" = "yes" ]; then
@@ -827,10 +886,11 @@ gather_project_info() {
     log_instruction "1) arcane_template (no navigation framework)"
     log_instruction "2) arcane_beamer (with Beamer navigation)"
     log_instruction "3) arcane_dock (system tray/menu bar app - desktop only)"
+    log_instruction "4) arcane_cli (command-line interface - Dart only)"
     echo ""
 
     local template_choice
-    read -p "$(echo -e ${CYAN}❯${NC}) Enter choice [1-3] (default: 1): " template_choice
+    read -p "$(echo -e ${CYAN}❯${NC}) Enter choice [1-4] (default: 1): " template_choice
     template_choice="${template_choice:-1}"
 
     case "$template_choice" in
@@ -850,6 +910,12 @@ gather_project_info() {
             PLATFORMS="linux,windows,macos"
             log_info "Note: arcane_dock is desktop-only (macOS, Linux, Windows)"
             ;;
+        4)
+            TEMPLATE_DIR="$SCRIPT_DIR/arcane_cli"
+            TEMPLATE_NAME="arcane_cli"
+            PLATFORMS=""
+            log_info "Note: arcane_cli is a Dart-only CLI application (no Flutter platforms)"
+            ;;
         *)
             log_warning "Invalid choice, using arcane_template"
             TEMPLATE_DIR="$SCRIPT_DIR/arcane_template"
@@ -864,11 +930,20 @@ gather_project_info() {
 configure_project_structure() {
     log_step "Project Structure Configuration"
 
-    log_info "The setup can create a 3-project architecture:"
-    log_instruction "• Client app (always created)"
-    log_instruction "• Models package (shared data models for client and server)"
-    log_instruction "• Server app (backend with Shelf router and Firebase Admin)"
-    echo ""
+    # CLI template is standalone - no Flutter app
+    if [ "$TEMPLATE_NAME" = "arcane_cli" ]; then
+        log_info "CLI template selected - creating Dart-only CLI application"
+        log_instruction "• CLI app (main project)"
+        log_instruction "• Models package (optional - shared data models)"
+        log_instruction "• Server app (optional - backend for CLI to interact with)"
+        echo ""
+    else
+        log_info "The setup can create a multi-project architecture:"
+        log_instruction "• Client app (always created)"
+        log_instruction "• Models package (shared data models for client and server)"
+        log_instruction "• Server app (backend with Shelf router and Firebase Admin)"
+        echo ""
+    fi
 
     if confirm "Do you want to create the models package?"; then
         CREATE_MODELS="yes"
@@ -1028,7 +1103,11 @@ show_configuration_summary() {
     echo ""
 
     log_info "Projects to be created:"
-    log_instruction "  $(pwd)/$APP_NAME (client app)"
+    if [ "$TEMPLATE_NAME" = "arcane_cli" ]; then
+        log_instruction "  $(pwd)/${APP_NAME}_cli (CLI app)"
+    else
+        log_instruction "  $(pwd)/$APP_NAME (client app)"
+    fi
     if [ "$CREATE_MODELS" = "yes" ]; then
         log_instruction "  $(pwd)/${APP_NAME}_models (shared models)"
     fi
@@ -1064,6 +1143,7 @@ TEMPLATE_NAME=$TEMPLATE_NAME
 PLATFORMS=$PLATFORMS
 CREATE_MODELS=$CREATE_MODELS
 CREATE_SERVER=$CREATE_SERVER
+CREATE_CLI=$CREATE_CLI
 USE_FIREBASE=$USE_FIREBASE
 FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID
 SETUP_CLOUD_RUN=$SETUP_CLOUD_RUN
@@ -1084,14 +1164,24 @@ setup_firebase_integration() {
         enable_google_apis "$FIREBASE_PROJECT_ID" || log_warning "Failed to enable some Google APIs"
     fi
 
-    # Configure FlutterFire
-    flutterfire_configure "$APP_NAME" "$FIREBASE_PROJECT_ID" || log_warning "FlutterFire configuration failed"
+    # Configure FlutterFire (skip for CLI apps - they use Firebase Admin SDK)
+    if [ "$TEMPLATE_NAME" != "arcane_cli" ]; then
+        flutterfire_configure "$APP_NAME" "$FIREBASE_PROJECT_ID" || log_warning "FlutterFire configuration failed"
+    else
+        log_info "Skipping FlutterFire configuration (CLI apps use Firebase Admin SDK)"
+    fi
 }
 
 show_final_summary() {
     echo ""
     log_success "Project Structure:"
-    log_instruction "  $APP_NAME/              - Client application"
+
+    if [ "$TEMPLATE_NAME" = "arcane_cli" ]; then
+        log_instruction "  ${APP_NAME}_cli/        - CLI application"
+    else
+        log_instruction "  $APP_NAME/              - Client application"
+    fi
+
     if [ "$CREATE_MODELS" = "yes" ]; then
         log_instruction "  ${APP_NAME}_models/     - Shared models package"
     fi
@@ -1106,18 +1196,39 @@ show_final_summary() {
     log_info "Next Steps:"
     echo ""
 
-    log_instruction "1. Run your app:"
-    log_instruction "   cd $APP_NAME"
-    log_instruction "   flutter run"
-    echo ""
+    if [ "$TEMPLATE_NAME" = "arcane_cli" ]; then
+        log_instruction "1. Generate CLI code and run your app:"
+        log_instruction "   cd ${APP_NAME}_cli"
+        log_instruction "   dart run build_runner build --delete-conflicting-outputs"
+        log_instruction "   dart run bin/main.dart --help"
+        echo ""
 
-    log_instruction "2. Generate app icons and splash screens (when ready):"
-    log_instruction "   • Add your icon: $APP_NAME/assets/icon/icon.png (1024x1024)"
-    log_instruction "   • Add your splash: $APP_NAME/assets/icon/splash.png"
-    log_instruction "   • Generate icons: cd $APP_NAME && dart run gen_icons"
-    log_instruction "   • Generate splash: cd $APP_NAME && dart run gen_splash"
-    log_instruction "   • Or generate both: cd $APP_NAME && dart run gen_assets"
-    echo ""
+        log_instruction "2. Optionally activate globally:"
+        log_instruction "   cd ${APP_NAME}_cli"
+        log_instruction "   dart pub global activate . --source=path"
+        log_instruction "   $APP_NAME --help"
+        echo ""
+
+        if [ "$USE_FIREBASE" = "yes" ]; then
+            log_instruction "3. Setup Firebase service account key:"
+            log_instruction "   • Place service account key in config/keys/service-account-key.json"
+            log_instruction "   • Or ~/.${APP_NAME}/service-account-key.json"
+            echo ""
+        fi
+    else
+        log_instruction "1. Run your app:"
+        log_instruction "   cd $APP_NAME"
+        log_instruction "   flutter run"
+        echo ""
+
+        log_instruction "2. Generate app icons and splash screens (when ready):"
+        log_instruction "   • Add your icon: $APP_NAME/assets/icon/icon.png (1024x1024)"
+        log_instruction "   • Add your splash: $APP_NAME/assets/icon/splash.png"
+        log_instruction "   • Generate icons: cd $APP_NAME && dart run gen_icons"
+        log_instruction "   • Generate splash: cd $APP_NAME && dart run gen_splash"
+        log_instruction "   • Or generate both: cd $APP_NAME && dart run gen_assets"
+        echo ""
+    fi
 
     if [ "$USE_FIREBASE" = "yes" ]; then
         log_instruction "3. Deploy to Firebase Hosting:"

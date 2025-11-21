@@ -141,6 +141,135 @@ copy_server_template() {
     return 0
 }
 
+copy_cli_template() {
+    local app_name="$1"
+    local template_root="$2"
+    local firebase_project_id="${3:-FIREBASE_PROJECT_ID}"
+    local create_models="${4:-no}"
+    local create_server="${5:-no}"
+    local with_firebase="${6:-no}"
+    local cli_name="${app_name}_cli"
+
+    log_step "Copying CLI Template"
+
+    local cli_template="$template_root/arcane_cli"
+
+    if [ ! -d "$cli_template" ]; then
+        log_warning "CLI template not found at $cli_template"
+        return 1
+    fi
+
+    log_info "Copying CLI template structure..."
+
+    # Copy pubspec.yaml
+    if [ -f "$cli_template/pubspec.yaml" ]; then
+        cp "$cli_template/pubspec.yaml" "$cli_name/pubspec.yaml" || return 1
+
+        # Uncomment models dependency if models package is being created
+        if [ "$create_models" = "yes" ]; then
+            log_info "Enabling models dependency in CLI"
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' 's/^  # APPNAME_models:/  APPNAME_models:/' "$cli_name/pubspec.yaml"
+                sed -i '' 's/^  #   path: \.\.\/APPNAME_models/    path: ..\/APPNAME_models/' "$cli_name/pubspec.yaml"
+            else
+                sed -i 's/^  # APPNAME_models:/  APPNAME_models:/' "$cli_name/pubspec.yaml"
+                sed -i 's/^  #   path: \.\.\/APPNAME_models/    path: ..\/APPNAME_models/' "$cli_name/pubspec.yaml"
+            fi
+        fi
+
+        # Uncomment Firebase dependencies if Firebase is enabled
+        if [ "$with_firebase" = "yes" ]; then
+            log_info "Enabling Firebase dependencies in CLI"
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' 's/^  # arcane_fluf:/  arcane_fluf:/' "$cli_name/pubspec.yaml"
+                sed -i '' 's/^  # firebase_dart:/  firebase_dart:/' "$cli_name/pubspec.yaml"
+                sed -i '' 's/^  # fire_crud:/  fire_crud:/' "$cli_name/pubspec.yaml"
+            else
+                sed -i 's/^  # arcane_fluf:/  arcane_fluf:/' "$cli_name/pubspec.yaml"
+                sed -i 's/^  # firebase_dart:/  firebase_dart:/' "$cli_name/pubspec.yaml"
+                sed -i 's/^  # fire_crud:/  fire_crud:/' "$cli_name/pubspec.yaml"
+            fi
+        fi
+
+        log_success "Copied CLI pubspec.yaml"
+    fi
+
+    # Copy bin directory
+    cp -r "$cli_template/bin" "$cli_name/" || return 1
+
+    # Copy lib directory
+    cp -r "$cli_template/lib" "$cli_name/" || return 1
+
+    # Copy analysis_options.yaml
+    if [ -f "$cli_template/analysis_options.yaml" ]; then
+        cp "$cli_template/analysis_options.yaml" "$cli_name/" || return 1
+    fi
+
+    # Copy README
+    if [ -f "$cli_template/README.md" ]; then
+        cp "$cli_template/README.md" "$cli_name/" || return 1
+    fi
+
+    log_info "Replacing placeholders in CLI..."
+
+    # Replace APPNAME with actual app name
+    find "$cli_name" -type f \( -name "*.dart" -o -name "*.md" -o -name "*.yaml" \) -exec \
+        sed -i.bak "s/APPNAME/$app_name/g" {} \; -exec rm {}.bak \;
+
+    # Replace FIREBASE_PROJECT_ID
+    find "$cli_name" -type f -name "*.dart" -exec \
+        sed -i.bak "s/FIREBASE_PROJECT_ID/$firebase_project_id/g" {} \; -exec rm {}.bak \;
+
+    # Replace AppName class name (PascalCase)
+    local class_name=$(snake_to_pascal "$app_name")
+    find "$cli_name" -type f -name "*.dart" -exec \
+        sed -i.bak "s/APPNAMERunner/${class_name}Runner/g" {} \; -exec rm {}.bak \;
+
+    # Rename main library file
+    if [ -f "$cli_name/lib/APPNAME_cli.dart" ]; then
+        mv "$cli_name/lib/APPNAME_cli.dart" "$cli_name/lib/${app_name}_cli.dart"
+    fi
+
+    # Handle conditional files based on Firebase/Server options
+    if [ "$with_firebase" = "yes" ]; then
+        log_info "Enabling Firebase imports in CLI"
+        # Uncomment Firebase imports
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' 's/^\/\/ FIREBASE_IMPORT: //' "$cli_name/lib/${app_name}_cli.dart"
+        else
+            sed -i 's/^\/\/ FIREBASE_IMPORT: //' "$cli_name/lib/${app_name}_cli.dart"
+        fi
+    fi
+
+    if [ "$create_server" = "yes" ]; then
+        log_info "Enabling server commands in CLI"
+        # Uncomment server imports and mounts
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' 's/^\/\/ SERVER_COMMAND_IMPORT: //' "$cli_name/lib/${app_name}_cli.dart"
+            sed -i '' 's/^  \/\/ SERVER_MOUNT: /  /' "$cli_name/lib/${app_name}_cli.dart"
+        else
+            sed -i 's/^\/\/ SERVER_COMMAND_IMPORT: //' "$cli_name/lib/${app_name}_cli.dart"
+            sed -i 's/^  \/\/ SERVER_MOUNT: /  /' "$cli_name/lib/${app_name}_cli.dart"
+        fi
+    else
+        # Remove server command file if not needed
+        rm -f "$cli_name/lib/commands/server_command.dart"
+    fi
+
+    # Uncomment models import if models are enabled
+    if [ "$create_models" = "yes" ]; then
+        log_info "Enabling models import in CLI"
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' 's/^\/\/ MODELS_IMPORT: //' "$cli_name/lib/${app_name}_cli.dart"
+        else
+            sed -i 's/^\/\/ MODELS_IMPORT: //' "$cli_name/lib/${app_name}_cli.dart"
+        fi
+    fi
+
+    log_success "CLI template copied and customized"
+    return 0
+}
+
 # Run if script is executed directly
 if [ "${BASH_SOURCE[0]}" -ef "$0" ]; then
     if [ $# -lt 2 ]; then
